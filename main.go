@@ -9,7 +9,9 @@ import (
 	"time"
 )
 
-var allowRussianQuotes bool
+const textFieldSize = 80
+
+var allowRussian, testMode bool
 
 func isRussian(s string) bool {
 	x := 0
@@ -24,7 +26,8 @@ func isRussian(s string) bool {
 	return false
 }
 
-func splitString(s string, maxLength int) []string {
+func splitString(s string) []string {
+	maxLength := textFieldSize
 	ru := isRussian(s)
 	if ru {
 		maxLength *= 7
@@ -58,19 +61,22 @@ func splitString(s string, maxLength int) []string {
 	return arr
 }
 
-func getRandomQuote() (res string) {
-	q := getQuotes()
+func getRandomAphorism() (res string) {
+	arr := getAphorismList()
 	seconds := time.Now().Unix()
 	t := time.Unix(seconds, 0)
-	s := t.String()[:14] // change every hour
+	s := t.String()
+	if !testMode {
+		s = s[:14] // change every hour
+	}
 	seed := []byte(s)
 	for {
-		h := sha1.Sum([]byte(seed))
-		seed = h[:]
-		i := binary.BigEndian.Uint64(h[:8])
-		r := int(i % uint64(len(q)))
-		res = q[r]
-		if allowRussianQuotes || !isRussian(res) {
+		hash := sha1.Sum([]byte(seed))
+		seed = hash[:]
+		i := binary.BigEndian.Uint64(hash[:8])
+		rnd := int(i % uint64(len(arr)))
+		res = arr[rnd]
+		if allowRussian || !isRussian(res) {
 			break
 		}
 	}
@@ -80,7 +86,13 @@ func getRandomQuote() (res string) {
 func processFlags() {
 	if len(os.Args) > 1 {
 		f := os.Args[1]
-		allowRussianQuotes = strings.Contains(f, "r")
+		testMode = strings.Contains(f, "t")
+		allowRussian = strings.Contains(f, "r") // todo: fix before commit
+
+		if strings.Contains(f, "d") {
+			runDebug()
+			os.Exit(0)
+		}
 		if strings.Contains(f, "h") || strings.Contains(f, "?") {
 			paint(createIgel(), getHelpText())
 			os.Exit(0)
@@ -95,20 +107,28 @@ func paint(pic []string, lines []string) {
 	}
 
 	cur := 0
-	for j, ps := range pic {
-		fmt.Printf(ps)
+	for j, p := range pic {
+		var text string
 		if j >= numEmptyLines && cur < len(lines) {
-			fmt.Printf(lines[cur])
+			text = lines[cur]
 			cur++
 		}
-		fmt.Println()
+		fmt.Println(p + text)
 	}
 }
 
 func main() {
 	processFlags()
 	pic := createIgel()
-	quote := getRandomQuote()
-	lines := splitString(quote, 80)
+	quote := getRandomAphorism()
+	lines := splitString(quote)
 	paint(pic, lines)
+}
+
+func runDebug() {
+	arr := getAphorismList()
+	quote := arr[54] // (line_num - 6) / 2
+	fmt.Println("running in debug mode")
+	lines := splitString(quote)
+	paint(createIgel(), lines)
 }
